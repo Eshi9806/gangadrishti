@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Dashboard - Ganga Monitor
+{% endblock %}
+
+{% block content %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Your Ganga Submissions</h2>
+        <a href="{{ url_for('upload') }}" class="btn" style="background-color: #2e7d32; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px;">Upload New Photo</a>
+    </div>
+
+    {% if submissions %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+            {% for sub in submissions %}
+                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <img src="{{ url_for('static', filename='uploads/' + sub.image_filename) }}" alt="Soil Photo" style="width: 100%; height: 180px; object-fit: cover; border-radius: 4px; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0.5rem 0; color: #1b5e20;">📍 Location: {{ sub.location }}</h4>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="text-align: center; color: #666; margin-top: 3rem;">You haven't uploaded any soil or water condition photos yet. Click the button above to add your first entry!</p>
+    {% endif %}
+{% endblock %}

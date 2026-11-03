@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block title %}Submit Photo - Ganga Monitor{% endblock %}
+
+{% block content %}
+<h2>Ganga Soil Quality & Observation</h2>
+<p>Upload a photo of the river to help us monitor soil and water quality, and discover nearby tourist spots!</p>
+
+<form action="/upload" method="POST" enctype="multipart/form-data">
+    <!-- Location Selection -->
+    <label for="location">Select Riverbank Location:</label>
+    <select name="location" id="location" required>
+        <option value="" disabled selected>-- Choose Location --</option>
+        {% for loc in locations %}
+            <option value="{{ loc }}">{{ loc }}</option>
+        {% endfor %}
+    </select>
+
+
+
+    <!-- Camera Capture / File Upload -->
+    <label for="photo">Take or Upload Photo:</label>
+    <input type="file" name="photo" id="photo" accept="image/*" capture="environment" required>
+
+    <button type="submit">Submit Observation</button>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Log In
+{% endblock %}
+
+{% block content %}
+    <h2>Log In</h2>
+    <form action="/login" method="post">
+        <label for="username">Username</label>
+        <input autocomplete="off" autofocus type="text" name="username" id="username" placeholder="Username" required>
+        
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" placeholder="Password" required>
+        
+        <button type="submit">Log In</button>
+    </form>
+
+    <p style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem;">
+        Don't have an account? <a href="{{ url_for('register') }}">Register here</a>
+    </p>
+{% endblock %}
