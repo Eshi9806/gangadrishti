@@ -213,6 +213,7 @@ TOURISM_SPOTS = {
 }
 
 # Approximate district centroids for automatic GPS-to-District mapping
+# Approximate district centroids for automatic GPS-to-District mapping
 DISTRICT_CENTROIDS = {
     "Buxar": (25.55, 83.98),
     "Bhojpur": (25.56, 84.66),
@@ -229,7 +230,12 @@ DISTRICT_CENTROIDS = {
 }
 
 def get_district_from_gps(lat, lon):
-  """Maps GPS latitude and longitude to the nearest Ganga-flowing district in Bihar."""
-  closest_district = "Patna"
-  min_dist = float('inf')
-  for district, (d_lat, d_lon) in DISTRICT_CENTROIDS.items():
+    """Maps GPS latitude and longitude to the nearest Ganga-flowing district in Bihar."""
+    closest_district = "Patna"
+    min_dist = float('inf')
+    for district, (d_lat, d_lon) in DISTRICT_CENTROIDS.items():
+        dist = (lat - d_lat)**2 + (lon - d_lon)**2
+        if dist < min_dist:
+            min_dist = dist
+            closest_district = district
+    return closest_district
