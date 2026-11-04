@@ -1,3 +1,4 @@
+"""importing all required libraries"""
 import os
 from flask import (
     Flask,
@@ -8,14 +9,15 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.middleware.proxy_fix import ProxyFix
 from helpers import login_required
 import sqlite3
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix
 
-# 1. Initialize the Flask application once at the top
+# 1. Initialize the Flask application once at the top with ProxyFix for Render HTTPS
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-fallback-key-12345")
 
 # Configure upload folder for Ganga photos
@@ -25,38 +27,42 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
 def allowed_file(filename):
-    return (
-        "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-    )
+  return (
+      "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+  )
+
 
 def get_db_connection():
-    conn = sqlite3.connect("ganga.db")
-    # Row factory allows accessing columns by name
-    conn.row_factory = sqlite3.Row
-    return conn
+  conn = sqlite3.connect("ganga.db")
+  # Row factory allows accessing columns by name
+  conn.row_factory = sqlite3.Row
+  return conn
+
 
 def init_db():
-    with get_db_connection() as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY"
-            " AUTOINCREMENT, username TEXT NOT NULL UNIQUE, hash TEXT NOT NULL);"
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS submissions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                user_id INTEGER, 
-                image_filename TEXT, 
-                location TEXT,
-                latitude REAL,
-                longitude REAL,
-                soil_condition TEXT, 
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            );
-            """
-        )
-        conn.commit()
+  with get_db_connection() as conn:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY"
+        " AUTOINCREMENT, username TEXT NOT NULL UNIQUE, hash TEXT NOT NULL);"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            user_id INTEGER, 
+            image_filename TEXT, 
+            location TEXT,
+            latitude REAL,
+            longitude REAL,
+            soil_condition TEXT, 
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        """
+    )
+    conn.commit()
+
 
 # Initialize database tables on startup
 init_db()
@@ -138,7 +144,10 @@ TOURISM_SPOTS = {
     "Begusarai": [
         {
             "name": "Simaria Ghat",
-            "desc": "Sacred pilgrimage and bathing ghat, birthplace of poet Ramdhari Singh Dinkar.",
+            "desc": (
+                "Sacred pilgrimage and bathing ghat, birthplace of poet"
+                " Ramdhari Singh Dinkar."
+            ),
             "link": "https://www.google.com/search?q=Simaria+Ghat+Begusarai",
         },
         {
@@ -169,15 +178,23 @@ TOURISM_SPOTS = {
     "Khagaria": [
         {
             "name": "Gogri Jamalpur Riverfront",
-            "desc": "Important confluence zone where the Burhi Gandak meets the Ganga.",
+            "desc": (
+                "Important confluence zone where the Burhi Gandak meets the"
+                " Ganga."
+            ),
             "link": "https://www.google.com/search?q=Khagaria+Ganga+riverfront",
         },
     ],
     "Bhagalpur": [
         {
             "name": "Vikramshila Dolphin Sanctuary",
-            "desc": "India's only sanctuary protecting endangered Gangetic river dolphins.",
-            "link": "https://www.google.com/search?q=Vikramshila+Gangetic+Dolphin+Sanctuary",
+            "desc": (
+                "India's only sanctuary protecting endangered Gangetic river"
+                " dolphins."
+            ),
+            "link": (
+                "https://www.google.com/search?q=Vikramshila+Gangetic+Dolphin+Sanctuary"
+            ),
         },
         {
             "name": "Ajhgaynath Temple",
@@ -188,7 +205,10 @@ TOURISM_SPOTS = {
     "Katihar": [
         {
             "name": "Manihari Ghat",
-            "desc": "Scenic final stretch where the Ganga flows out of Bihar toward Jharkhand.",
+            "desc": (
+                "Scenic final stretch where the Ganga flows out of Bihar toward"
+                " Jharkhand."
+            ),
             "link": "https://www.google.com/search?q=Manihari+Ghat+Katihar",
         },
     ],
@@ -222,119 +242,152 @@ def get_district_from_gps(lat, lon):
     return closest_district
 
 
-# ==================== ROUTES ====================
-
 @app.route("/")
-@login_required
 def index():
-    with get_db_connection() as conn:
-        submissions = conn.execute(
-            "SELECT * FROM submissions WHERE user_id = ?", (session["user_id"],)
-        ).fetchall()
-    return render_template("index.html", submissions=submissions)
+  # If user is not logged in, show the public welcome/login landing page
+  if not session.get("user_id"):
+      return render_template("welcome.html")
+  
+  user_id = session.get("user_id")
+  with get_db_connection() as conn:
+    submissions = conn.execute(
+        "SELECT * FROM submissions WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ).fetchall()
+  return render_template("index.html", submissions=submissions)
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    session.clear()
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        
-        if not username or not password:
-            return render_template("login.html", error="Must provide username and password")
+  """Log user in"""
+  session.clear()
 
-        with get_db_connection() as conn:
-            user = conn.execute(
-                "SELECT * FROM users WHERE username = ?", (username,)
-            ).fetchone()
+  if request.method == "POST":
+    if not request.form.get("username"):
+      return "must provide username", 403
+    elif not request.form.get("password"):
+      return "must provide password", 403
 
-        if user is None or not check_password_hash(user["hash"], password):
-            return render_template("login.html", error="Invalid username and/or password")
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM users WHERE username = ?", (request.form.get("username"),)
+    ).fetchall()
+    conn.close()
 
-        session["user_id"] = user["id"]
-        return redirect("/")
+    if len(rows) != 1 or not check_password_hash(
+        rows[0]["hash"], request.form.get("password")
+    ):
+      return "invalid username and/or password", 403
 
+    session["user_id"] = rows[0]["id"]
+    return redirect("/")
+  else:
     return render_template("login.html")
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        confirmation = request.form.get("confirmation")
-
-        if not username or not password or password != confirmation:
-            return render_template("register.html", error="Invalid input or passwords do not match")
-
-        hash_password = generate_password_hash(password)
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO users (username, hash) VALUES (?, ?)",
-                    (username, hash_password),
-                )
-                conn.commit()
-                session["user_id"] = cursor.lastrowid
-        except sqlite3.IntegrityError:
-            return render_template("register.html", error="Username already exists")
-
-        return redirect("/login")
-
-    return render_template("register.html")
 
 
 @app.route("/logout")
+@login_required
 def logout():
-    session.clear()
+  """Log user out"""
+  session.clear()
+  return redirect("/login")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+  if request.method == "GET":
+    return render_template("register.html")
+  else:
+    username = request.form.get("username")
+    if not username:
+      return "Provide Username", 400
+
+    password = request.form.get("password")
+    if not password:
+      return "Provide a password", 400
+
+    confirm_password = request.form.get("confirmation")
+    if not confirm_password:
+      return "Confirm Password", 400
+
+    if password != confirm_password:
+      return "Password not matched", 400
+
+    conn = get_db_connection()
+    if (
+        len(
+            conn.execute(
+                "SELECT * FROM users WHERE username = ?", (username,)
+            ).fetchall()
+        )
+        > 0
+    ):
+      conn.close()
+      return "Username already taken", 400
+
+    password_hash = generate_password_hash(password)
+    conn.execute(
+        "INSERT INTO users (username, hash) VALUES (?, ?)",
+        (username, password_hash),
+    )
+    conn.commit()
+    conn.close()
+
+    # Redirect to login page after successful registration
     return redirect("/login")
 
 
 @app.route("/upload", methods=["GET", "POST"])
 @login_required
 def upload():
-    if request.method == "POST":
-        file = request.files.get("file")
-        soil_condition = request.form.get("soil_condition")
-        
-        # Get GPS coordinates sent from the frontend JS
-        try:
-            latitude = float(request.form.get("latitude"))
-            longitude = float(request.form.get("longitude"))
-        except (TypeError, ValueError):
-            latitude = 25.61  # Fallback Patna default
-            longitude = 85.14
+  if request.method == "GET":
+    return render_template("upload.html", locations=list(TOURISM_SPOTS.keys()))
+  else:
+    soil_condition = request.form.get("soil_condition", "Alluvial / Normal")
+    
+    try:
+        latitude = float(request.form.get("latitude"))
+        longitude = float(request.form.get("longitude"))
+    except (TypeError, ValueError):
+        latitude = 25.61  # Fallback Patna default
+        longitude = 85.14
 
-        # Automatically compute district from GPS
-        detected_location = get_district_from_gps(latitude, longitude)
+    detected_location = get_district_from_gps(latitude, longitude)
 
-        filename = None
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+    file = request.files.get("file") or request.files.get("photo")
+    if not file or not allowed_file(file.filename):
+      return "Valid image file is required", 400
 
-        with get_db_connection() as conn:
-            conn.execute(
-                """
+    filename = secure_filename(file.filename)
+    file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+
+    user_id = session.get("user_id")
+
+    conn = get_db_connection()
+    try:
+      conn.execute(
+          """
                 INSERT INTO submissions (user_id, image_filename, location, latitude, longitude, soil_condition)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (session["user_id"], filename, detected_location, latitude, longitude, soil_condition),
-            )
-            conn.commit()
+          (user_id, filename, detected_location, latitude, longitude, soil_condition),
+      )
+      conn.commit()
+      flash("Photo and observation submitted successfully!", "success")
+    finally:
+      conn.close()
 
-        # Fetch tourism spots for the calculated district (mapped to 'recommendations' for your success.html)
-        recommendations = TOURISM_SPOTS.get(detected_location, [])
-        
-        return render_template(
-            "success.html", 
-            location=detected_location, 
-            recommendations=recommendations, 
-            soil=soil_condition,
-            latitude=latitude,
-            longitude=longitude,
-            filename=filename
-        )
+    recommendations = TOURISM_SPOTS.get(detected_location, [])
+    return render_template(
+        "success.html",
+        filename=filename,
+        location=detected_location,
+        recommendations=recommendations,
+        latitude=latitude,
+        longitude=longitude,
+        soil=soil_condition
+    )
 
-    return render_template("upload.html")
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
