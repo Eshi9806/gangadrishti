@@ -6,17 +6,25 @@
 <h2>Ganga Soil Quality & Observation</h2>
 <p>Upload a photo of the river to help us monitor soil and water quality, and discover nearby tourist spots!</p>
 
-<form action="/upload" method="POST" enctype="multipart/form-data">
-    <!-- Location Selection -->
-    <label for="location">Select Riverbank Location:</label>
-    <select name="location" id="location" required>
+<form action="/upload" method="POST" enctype="multipart/form-data" onsubmit="return validateLocation()">
+    <!-- Optional: Keep Location Selection as fallback or remove if fully automated -->
+    <!-- <label for="location">Select Riverbank Location:</label>
+    <select name="location" id="location">
         <option value="" disabled selected>-- Choose Location --</option>
         {% for loc in locations %}
             <option value="{{ loc }}">{{ loc }}</option>
         {% endfor %}
-    </select>
+    </select> -->
 
+    <!-- Hidden Inputs for Live GPS Coordinates -->
+    <input type="hidden" id="latitude" name="latitude">
+    <input type="hidden" id="longitude" name="longitude">
 
+    <!-- GPS Location Status Display -->
+    <div style="margin-bottom: 15px;">
+        <button type="button" onclick="fetchLocation()" style="padding: 6px 12px; font-size: 14px; cursor: pointer;">Detect My Live Location (GPS)</button>
+        <small id="location-status" style="display: block; margin-top: 5px; color: #6c757d;">Detecting GPS coordinates automatically...</small>
+    </div>
 
     <!-- Camera Capture / File Upload -->
     <label for="photo">Take or Upload Photo:</label>
@@ -24,4 +32,44 @@
 
     <button type="submit">Submit Observation</button>
 </form>
+
+<!-- JavaScript to handle browser geolocation -->
+<script>
+function fetchLocation() {
+    const statusText = document.getElementById('location-status');
+    if (navigator.geolocation) {
+        statusText.textContent = "Detecting GPS coordinates...";
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                document.getElementById('latitude').value = position.coords.latitude;
+                document.getElementById('longitude').value = position.coords.longitude;
+                statusText.textContent = `Location captured successfully! (Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)})`;
+                statusText.style.color = "green";
+            },
+            function(error) {
+                statusText.textContent = "Error: Please enable location permissions in your browser.";
+                statusText.style.color = "red";
+            },
+            { enableHighAccuracy: true }
+        );
+    } else {
+        statusText.textContent = "Geolocation is not supported by your browser.";
+        statusText.style.color = "red";
+    }
+}
+
+// Automatically trigger location detection when the page loads
+window.onload = function() {
+    fetchLocation();
+};
+
+function validateLocation() {
+    const lat = document.getElementById('latitude').value;
+    if (!lat) {
+        alert("Please wait for your GPS coordinates to be detected before submitting.");
+        return false;
+    }
+    return true;
+}
+</script>
 {% endblock %}

@@ -46,9 +46,18 @@ def init_db():
         " AUTOINCREMENT, username TEXT NOT NULL UNIQUE, hash TEXT NOT NULL);"
     )
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS submissions (id INTEGER PRIMARY KEY"
-        " AUTOINCREMENT, user_id INTEGER, image_filename TEXT, location TEXT,"
-        " soil_condition TEXT, FOREIGN KEY(user_id) REFERENCES users(id));"
+        """
+        CREATE TABLE IF NOT EXISTS submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            user_id INTEGER, 
+            image_filename TEXT, 
+            location TEXT,
+            latitude REAL,
+            longitude REAL,
+            soil_condition TEXT, 
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+        """
     )
     conn.commit()
 
@@ -203,141 +212,24 @@ TOURISM_SPOTS = {
     ],
 }
 
+# Approximate district centroids for automatic GPS-to-District mapping
+DISTRICT_CENTROIDS = {
+    "Buxar": (25.55, 83.98),
+    "Bhojpur": (25.56, 84.66),
+    "Saran": (25.77, 84.73),
+    "Patna": (25.61, 85.14),
+    "Vaishali": (25.68, 85.21),
+    "Samastipur": (25.85, 85.78),
+    "Begusarai": (25.42, 86.13),
+    "Lakhisarai": (25.17, 86.08),
+    "Munger": (25.37, 86.47),
+    "Khagaria": (25.50, 86.48),
+    "Bhagalpur": (25.25, 86.98),
+    "Katihar": (25.54, 87.57)
+}
 
-@app.route("/")
-@login_required
-def index():
-  user_id = session.get("user_id")
-  with get_db_connection() as conn:
-    submissions = conn.execute(
-        "SELECT * FROM submissions WHERE user_id = ? ORDER BY id DESC",
-        (user_id,),
-    ).fetchall()
-  return render_template("index.html", submissions=submissions)
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-  """Log user in"""
-  session.clear()
-
-  if request.method == "POST":
-    if not request.form.get("username"):
-      return "must provide username", 403
-    elif not request.form.get("password"):
-      return "must provide password", 403
-
-    conn = get_db_connection()
-    rows = conn.execute(
-        "SELECT * FROM users WHERE username = ?", (request.form.get("username"),)
-    ).fetchall()
-    conn.close()
-
-    if len(rows) != 1 or not check_password_hash(
-        rows[0]["hash"], request.form.get("password")
-    ):
-      return "invalid username and/or password", 403
-
-    session["user_id"] = rows[0]["id"]
-    return redirect("/")
-  else:
-    return render_template("login.html")
-
-
-@app.route("/logout")
-@login_required
-def logout():
-  """Log user out"""
-  session.clear()
-  return redirect("/login")
-
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-  if request.method == "GET":
-    return render_template("register.html")
-  else:
-    username = request.form.get("username")
-    if not username:
-      return "Provide Username", 400
-
-    password = request.form.get("password")
-    if not password:
-      return "Provide a password", 400
-
-    confirm_password = request.form.get("confirmation")
-    if not confirm_password:
-      return "Confirm Password", 400
-
-    if password != confirm_password:
-      return "Password not matched", 400
-
-    conn = get_db_connection()
-    if (
-        len(
-            conn.execute(
-                "SELECT * FROM users WHERE username = ?", (username,)
-            ).fetchall()
-        )
-        > 0
-    ):
-      conn.close()
-      return "Username already taken", 400
-
-    password_hash = generate_password_hash(password)
-    conn.execute(
-        "INSERT INTO users (username, hash) VALUES (?, ?)",
-        (username, password_hash),
-    )
-    conn.commit()
-    conn.close()
-
-    return redirect("/login")
-
-
-@app.route("/upload", methods=["GET", "POST"])
-@login_required
-def upload():
-  if request.method == "GET":
-    return render_template("upload.html", locations=list(TOURISM_SPOTS.keys()))
-  else:
-    location = request.form.get("location")
-    if not location:
-      return "Provide Location", 400
-
-    file = request.files.get("photo")
-    if not file or not allowed_file(file.filename):
-      return "Valid image file is required", 400
-
-    filename = secure_filename(file.filename)
-    file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-
-    user_id = session.get("user_id")
-
-    conn = get_db_connection()
-    try:
-      conn.execute(
-          """
-                INSERT INTO submissions (user_id, image_filename, location)
-                VALUES (?, ?, ?)
-                """,
-          (user_id, filename, location),
-      )
-      conn.commit()
-      flash("Photo and observation submitted successfully!", "success")
-    finally:
-      conn.close()
-
-    recommendations = TOURISM_SPOTS.get(location, [])
-    return render_template(
-        "success.html",
-        filename=filename,
-        location=location,
-        recommendations=recommendations,
-    )
-
-
-
-if __name__ == '__main__':
-    # Add host='0.0.0.0' inside the run() function
-    app.run(debug=True, host='0.0.0.0', port=5000)
+def get_district_from_gps(lat, lon):
+  """Maps GPS latitude and longitude to the nearest Ganga-flowing district in Bihar."""
+  closest_district = "Patna"
+  min_dist = float('inf')
+  for district, (d_lat, d_lon) in DISTRICT_CENTROIDS.items():
