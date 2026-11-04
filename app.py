@@ -12,6 +12,7 @@ from helpers import login_required
 import sqlite3
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # 1. Initialize the Flask application once at the top
 app = Flask(__name__)
