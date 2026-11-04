@@ -1,75 +1,86 @@
-{% extends "layout.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Submission - GangaDrishti</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 500px; margin: 40px auto; background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
+        h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        input[type="file"], select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .gps-status { font-size: 13px; color: #e67e22; margin-top: 5px; font-weight: bold; }
+        .btn { width: 100%; padding: 12px; background-color: #2ecc71; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn:hover { background-color: #27ae60; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Submit Ganga Monitoring Data</h2>
+        
+        <form action="/upload" method="POST" enctype="multipart/form-data" id="uploadForm">
+            <!-- Hidden inputs to store GPS coordinates captured by JS -->
+            <input type="hidden" id="latitude" name="latitude">
+            <input type="hidden" id="longitude" name="longitude">
 
-{% block title %}Submit Photo - Ganga Monitor{% endblock %}
+            <div class="form-group">
+                <label for="file">Upload Photo of River / Ghat:</label>
+                <input type="file" id="file" name="file" accept="image/png, image/jpeg, image/jpg" required>
+            </div>
 
-{% block content %}
-<h2>Ganga Soil Quality & Observation</h2>
-<p>Upload a photo of the river to help us monitor soil and water quality, and discover nearby tourist spots!</p>
+            <div class="form-group">
+                <label for="soil_condition">Soil Condition / Observations:</label>
+                <select id="soil_condition" name="soil_condition" required>
+                    <option value="" disabled selected>Select condition</option>
+                    <option value="Alluvial / Normal">Alluvial / Normal</option>
+                    <option value="Silty / Sandy">Silty / Sandy</option>
+                    <option value="Eroded Bank">Eroded Bank</option>
+                    <option value="Clayey / Dense">Clayey / Dense</option>
+                </select>
+            </div>
 
-<form action="/upload" method="POST" enctype="multipart/form-data" onsubmit="return validateLocation()">
-    <!-- Optional: Keep Location Selection as fallback or remove if fully automated -->
-    <!-- <label for="location">Select Riverbank Location:</label>
-    <select name="location" id="location">
-        <option value="" disabled selected>-- Choose Location --</option>
-        {% for loc in locations %}
-            <option value="{{ loc }}">{{ loc }}</option>
-        {% endfor %}
-    </select> -->
+            <div class="form-group">
+                <p class="gps-status" id="gpsStatus">📍 Detecting your live GPS location...</p>
+            </div>
 
-    <!-- Hidden Inputs for Live GPS Coordinates -->
-    <input type="hidden" id="latitude" name="latitude">
-    <input type="hidden" id="longitude" name="longitude">
-
-    <!-- GPS Location Status Display -->
-    <div style="margin-bottom: 15px;">
-        <button type="button" onclick="fetchLocation()" style="padding: 6px 12px; font-size: 14px; cursor: pointer;">Detect My Live Location (GPS)</button>
-        <small id="location-status" style="display: block; margin-top: 5px; color: #6c757d;">Detecting GPS coordinates automatically...</small>
+            <button type="submit" class="btn">Submit Data</button>
+        </form>
     </div>
 
-    <!-- Camera Capture / File Upload -->
-    <label for="photo">Take or Upload Photo:</label>
-    <input type="file" name="photo" id="photo" accept="image/*" capture="environment" required>
+    <script>
+        // Automatically fetch browser GPS coordinates on page load
+        window.addEventListener("DOMContentLoaded", () => {
+            const statusEl = document.getElementById("gpsStatus");
+            const latInput = document.getElementById("latitude");
+            const lonInput = document.getElementById("longitude");
 
-    <button type="submit">Submit Observation</button>
-</form>
-
-<!-- JavaScript to handle browser geolocation -->
-<script>
-function fetchLocation() {
-    const statusText = document.getElementById('location-status');
-    if (navigator.geolocation) {
-        statusText.textContent = "Detecting GPS coordinates...";
-        navigator.geolocation.getCurrentPosition(
-            function(position) {
-                document.getElementById('latitude').value = position.coords.latitude;
-                document.getElementById('longitude').value = position.coords.longitude;
-                statusText.textContent = `Location captured successfully! (Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)})`;
-                statusText.style.color = "green";
-            },
-            function(error) {
-                statusText.textContent = "Error: Please enable location permissions in your browser.";
-                statusText.style.color = "red";
-            },
-            { enableHighAccuracy: true }
-        );
-    } else {
-        statusText.textContent = "Geolocation is not supported by your browser.";
-        statusText.style.color = "red";
-    }
-}
-
-// Automatically trigger location detection when the page loads
-window.onload = function() {
-    fetchLocation();
-};
-
-function validateLocation() {
-    const lat = document.getElementById('latitude').value;
-    if (!lat) {
-        alert("Please wait for your GPS coordinates to be detected before submitting.");
-        return false;
-    }
-    return true;
-}
-</script>
-{% endblock %}
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        latInput.value = position.coords.latitude;
+                        lonInput.value = position.coords.longitude;
+                        statusEl.style.color = "#27ae60";
+                        statusEl.innerText = "📍 GPS Location captured successfully!";
+                    },
+                    (error) => {
+                        console.warn("Geolocation error:", error.message);
+                        // Fallback Patna coordinates if user blocks location
+                        latInput.value = 25.61;
+                        lonInput.value = 85.14;
+                        statusEl.style.color = "#e74c3c";
+                        statusEl.innerText = "⚠️ Location access denied. Defaulting to Patna region.";
+                    },
+                    { timeout: 10000 }
+                );
+            } else {
+                latInput.value = 25.61;
+                lonInput.value = 85.14;
+                statusEl.style.color = "#e74c3c";
+                statusEl.innerText = "⚠️ Geolocation not supported by your browser.";
+            }
+        });
+    </script>
+</body>
+</html>

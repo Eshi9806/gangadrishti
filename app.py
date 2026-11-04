@@ -324,8 +324,17 @@ def upload():
             )
             conn.commit()
 
-        # Fetch tourism spots for the calculated district
-        spots = TOURISM_SPOTS.get(detected_location, [])
-        return render_template("success.html", location=detected_location, spots=spots, soil=soil_condition)
+        # Fetch tourism spots for the calculated district (mapped to 'recommendations' for your success.html)
+        recommendations = TOURISM_SPOTS.get(detected_location, [])
+        
+        return render_template(
+            "success.html", 
+            location=detected_location, 
+            recommendations=recommendations, 
+            soil=soil_condition,
+            latitude=latitude,
+            longitude=longitude,
+            filename=filename
+        )
 
     return render_template("upload.html")
