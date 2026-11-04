@@ -1,4 +1,3 @@
-"""importing all required libraries"""
 import os
 from flask import (
     Flask,
@@ -25,42 +24,38 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
 def allowed_file(filename):
-  return (
-      "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-  )
-
+    return (
+        "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
 
 def get_db_connection():
-  conn = sqlite3.connect("ganga.db")
-  # Row factory allows accessing columns by name
-  conn.row_factory = sqlite3.Row
-  return conn
-
+    conn = sqlite3.connect("ganga.db")
+    # Row factory allows accessing columns by name
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-  with get_db_connection() as conn:
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY"
-        " AUTOINCREMENT, username TEXT NOT NULL UNIQUE, hash TEXT NOT NULL);"
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            user_id INTEGER, 
-            image_filename TEXT, 
-            location TEXT,
-            latitude REAL,
-            longitude REAL,
-            soil_condition TEXT, 
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-        """
-    )
-    conn.commit()
-
+    with get_db_connection() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY"
+            " AUTOINCREMENT, username TEXT NOT NULL UNIQUE, hash TEXT NOT NULL);"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                user_id INTEGER, 
+                image_filename TEXT, 
+                location TEXT,
+                latitude REAL,
+                longitude REAL,
+                soil_condition TEXT, 
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            """
+        )
+        conn.commit()
 
 # Initialize database tables on startup
 init_db()
@@ -142,10 +137,7 @@ TOURISM_SPOTS = {
     "Begusarai": [
         {
             "name": "Simaria Ghat",
-            "desc": (
-                "Sacred pilgrimage and bathing ghat, birthplace of poet"
-                " Ramdhari Singh Dinkar."
-            ),
+            "desc": "Sacred pilgrimage and bathing ghat, birthplace of poet Ramdhari Singh Dinkar.",
             "link": "https://www.google.com/search?q=Simaria+Ghat+Begusarai",
         },
         {
@@ -176,23 +168,15 @@ TOURISM_SPOTS = {
     "Khagaria": [
         {
             "name": "Gogri Jamalpur Riverfront",
-            "desc": (
-                "Important confluence zone where the Burhi Gandak meets the"
-                " Ganga."
-            ),
+            "desc": "Important confluence zone where the Burhi Gandak meets the Ganga.",
             "link": "https://www.google.com/search?q=Khagaria+Ganga+riverfront",
         },
     ],
     "Bhagalpur": [
         {
             "name": "Vikramshila Dolphin Sanctuary",
-            "desc": (
-                "India's only sanctuary protecting endangered Gangetic river"
-                " dolphins."
-            ),
-            "link": (
-                "https://www.google.com/search?q=Vikramshila+Gangetic+Dolphin+Sanctuary"
-            ),
+            "desc": "India's only sanctuary protecting endangered Gangetic river dolphins.",
+            "link": "https://www.google.com/search?q=Vikramshila+Gangetic+Dolphin+Sanctuary",
         },
         {
             "name": "Ajhgaynath Temple",
@@ -203,16 +187,12 @@ TOURISM_SPOTS = {
     "Katihar": [
         {
             "name": "Manihari Ghat",
-            "desc": (
-                "Scenic final stretch where the Ganga flows out of Bihar toward"
-                " Jharkhand."
-            ),
+            "desc": "Scenic final stretch where the Ganga flows out of Bihar toward Jharkhand.",
             "link": "https://www.google.com/search?q=Manihari+Ghat+Katihar",
         },
     ],
 }
 
-# Approximate district centroids for automatic GPS-to-District mapping
 # Approximate district centroids for automatic GPS-to-District mapping
 DISTRICT_CENTROIDS = {
     "Buxar": (25.55, 83.98),
@@ -239,3 +219,113 @@ def get_district_from_gps(lat, lon):
             min_dist = dist
             closest_district = district
     return closest_district
+
+
+# ==================== ROUTES ====================
+
+@app.route("/")
+@login_required
+def index():
+    with get_db_connection() as conn:
+        submissions = conn.execute(
+            "SELECT * FROM submissions WHERE user_id = ?", (session["user_id"],)
+        ).fetchall()
+    return render_template("index.html", submissions=submissions)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    session.clear()
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        
+        if not username or not password:
+            return render_template("login.html", error="Must provide username and password")
+
+        with get_db_connection() as conn:
+            user = conn.execute(
+                "SELECT * FROM users WHERE username = ?", (username,)
+            ).fetchone()
+
+        if user is None or not check_password_hash(user["hash"], password):
+            return render_template("login.html", error="Invalid username and/or password")
+
+        session["user_id"] = user["id"]
+        return redirect("/")
+
+    return render_template("login.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        confirmation = request.form.get("confirmation")
+
+        if not username or not password or password != confirmation:
+            return render_template("register.html", error="Invalid input or passwords do not match")
+
+        hash_password = generate_password_hash(password)
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO users (username, hash) VALUES (?, ?)",
+                    (username, hash_password),
+                )
+                conn.commit()
+                session["user_id"] = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return render_template("register.html", error="Username already exists")
+
+        return redirect("/")
+
+    return render_template("register.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
+@app.route("/upload", methods=["GET", "POST"])
+@login_required
+def upload():
+    if request.method == "POST":
+        file = request.files.get("file")
+        soil_condition = request.form.get("soil_condition")
+        
+        # Get GPS coordinates sent from the frontend JS
+        try:
+            latitude = float(request.form.get("latitude"))
+            longitude = float(request.form.get("longitude"))
+        except (TypeError, ValueError):
+            latitude = 25.61  # Fallback Patna default
+            longitude = 85.14
+
+        # Automatically compute district from GPS
+        detected_location = get_district_from_gps(latitude, longitude)
+
+        filename = None
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+
+        with get_db_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO submissions (user_id, image_filename, location, latitude, longitude, soil_condition)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (session["user_id"], filename, detected_location, latitude, longitude, soil_condition),
+            )
+            conn.commit()
+
+        # Fetch tourism spots for the calculated district
+        spots = TOURISM_SPOTS.get(detected_location, [])
+        return render_template("success.html", location=detected_location, spots=spots, soil=soil_condition)
+
+    return render_template("upload.html")
