@@ -244,9 +244,9 @@ def get_district_from_gps(lat, lon):
 
 @app.route("/")
 def index():
-  # If user is not logged in, show the public welcome/login landing page
+  # If user is not logged in, send them straight to the login page
   if not session.get("user_id"):
-      return render_template("welcome.html")
+      return redirect("/login")
   
   user_id = session.get("user_id")
   with get_db_connection() as conn:
@@ -255,6 +255,7 @@ def index():
         (user_id,),
     ).fetchall()
   return render_template("index.html", submissions=submissions)
+  
 
 
 @app.route("/login", methods=["GET", "POST"])
